@@ -1,4 +1,7 @@
-# 🐱 堇言AI — 一个 WebUI 可视化管理的 QQ 机器人
+<h1 align="center">
+  <img src="launcher/static/logo.png" alt="logo" width="48" align="top">
+  堇言AI — 一个 WebUI可视化管理的 QQ 机器人
+</h1>
 
 <p align="center">
   <img src="https://img.shields.io/badge/Python-3.10+-3776AB?style=flat&logo=python&logoColor=white" alt="Python">
