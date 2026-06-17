@@ -1,0 +1,4 @@
+# 依赖
+aiohttp>=3.9,<4
+openai>=1.0
+python-dotenv>=1.0

@@ -1,0 +1,26 @@
+{
+  "llm": {
+    "api_key": "",
+    "api_base": "https://api.deepseek.com",
+    "model": "deepseek-chat",
+    "temperature": 0.7,
+    "max_tokens": 100
+  },
+  "bot": {
+    "owner": "",
+    "bot_name": "",
+    "owner_title": "",
+    "ws_url": "ws://127.0.0.1:6700",
+    "whitelist": []
+  },
+  "napcat": {
+    "path": ""
+  },
+  "background": {
+    "url": "",
+    "blur": 0,
+    "offsetX": 0,
+    "offsetY": 0,
+    "theme": "light"
+  }
+}
