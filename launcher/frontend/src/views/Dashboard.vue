@@ -96,7 +96,7 @@ const cards = computed(() => [
   {
     icon: '🔌',
     label: 'QQ 连接',
-    value: status.value.napcat_logged ? 'QQ状态' : status.value.napcat_running ? '等待扫码' : '未启动',
+    value: status.value.napcat_logged ? '已连接' : status.value.napcat_running ? '等待扫码' : '未启动',
     color: status.value.napcat_logged ? '#4ade80' : status.value.napcat_running ? '#fbbf24' : '#64748b'
   },
   {

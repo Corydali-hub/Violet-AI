@@ -8,7 +8,8 @@ import json
 from pathlib import Path
 from dotenv import load_dotenv
 
-load_dotenv()
+# 始终从脚本所在目录加载 .env（不受 cwd 影响）
+load_dotenv(Path(__file__).parent / ".env")
 
 # ============================================================
 # 工具：读取 WebUI 的配置文件

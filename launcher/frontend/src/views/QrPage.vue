@@ -32,7 +32,7 @@ const statusClass = computed(() => ({
   'status-off': !status.value.napcat_running,
 }))
 const statusText = computed(() => {
-  if (status.value.napcat_logged) return '已登录'
+  if (status.value.napcat_logged) return 'botQQ状态'
   if (status.value.napcat_running) return '等待扫码...'
   return 'NapCat 未运行'
 })

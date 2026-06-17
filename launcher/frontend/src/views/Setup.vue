@@ -29,8 +29,8 @@
         <el-form-item label="主人称呼">
           <el-input v-model="form.bot_owner_title" placeholder="主人 / 姐姐 / 老大" />
         </el-form-item>
-        <el-form-item label="NapCat 路径">
-          <el-input v-model="form.napcat_path" placeholder="E:/path/to/napcat" />
+        <el-form-item label="Bot QQ">
+          <el-input v-model="form.bot_qq" placeholder="Bot 登录的 QQ 号" />
         </el-form-item>
         <el-form-item label="OneBot WS 地址">
           <el-input v-model="form.bot_ws_url" placeholder="ws://localhost:8080" />
@@ -56,8 +56,8 @@ const form = reactive({
   llm_model: '',
   bot_name: '',
   bot_owner: '',
-  bot_owner_title: '',     // 新增：主人称呼
-  napcat_path: '',
+  bot_owner_title: '',
+  bot_qq: '',
   bot_ws_url: '',
 })
 
@@ -69,8 +69,8 @@ onMounted(async () => {
     form.llm_model = data.llm?.model || ''
     form.bot_name = data.bot?.bot_name || ''
     form.bot_owner = data.bot?.owner || ''
-    form.bot_owner_title = data.bot?.owner_title || ''   // 新增
-    form.napcat_path = data.napcat?.path || ''
+    form.bot_owner_title = data.bot?.owner_title || ''
+    form.bot_qq = data.bot?.qq || ''
     form.bot_ws_url = data.bot?.ws_url || ''
   } catch {}
 })
@@ -87,18 +87,18 @@ async function save() {
     },
     bot: {
       owner: form.bot_owner,
+      qq: form.bot_qq,
       bot_name: form.bot_name,
-      owner_title: form.bot_owner_title,   // 新增
+      owner_title: form.bot_owner_title,
       ws_url: form.bot_ws_url,
       whitelist: [],
     },
-    napcat: { path: form.napcat_path },
   }
   try {
     await axios.put('/api/config', cfg)
-    ElMessage.success('✅ 配置已保存')
+    ElMessage.success('配置已保存')
   } catch {
-    ElMessage.error('❌ 保存失败')
+    ElMessage.error('保存失败')
   }
   saving.value = false
 }

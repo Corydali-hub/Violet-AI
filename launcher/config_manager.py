@@ -17,6 +17,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     },
     "bot": {
         "owner": "2272025586",
+        "qq": "",
         "bot_name": "Kelly_Bundy",
         "ws_url": "ws://127.0.0.1:6700",
         "whitelist": [],

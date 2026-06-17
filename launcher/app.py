@@ -1,5 +1,6 @@
 """Kelly_Bundy Launcher — FastAPI 后端。"""
 import asyncio
+import json
 import os
 import sys
 import time
@@ -21,6 +22,88 @@ from launcher import manager as mgr
 from state_manager import load_all_states, save_state_for_launcher, set_all_paused   # 新增
 
 app = FastAPI(title="Kelly_Bundy Launcher", version="2.0")
+
+# NapCat 配置目录（用于自动生成账号配置文件）
+_NAPCAT_CONFIG_DIR = _PROJECT_ROOT / "NapCat.Shell" / "config"
+# NapCat 本体路径（自动检测，无需用户填写）
+_NAPCAT_PATH = _PROJECT_ROOT / "NapCat.Shell"
+
+
+def _get_napcat_path() -> str:
+    """获取 NapCat 路径：优先用户配置，否则自动检测项目自带的 NapCat.Shell。"""
+    configured = cfg.get("napcat.path", "")
+    if configured and Path(configured).exists():
+        return configured
+    if _NAPCAT_PATH.exists():
+        return str(_NAPCAT_PATH)
+    return configured  # 回退（可能为空，让调用方自行处理）
+
+
+def _sync_napcat_configs(qq: str):
+    """根据填写的 QQ 号，在 NapCat.Shell/config 中生成三个配置文件。"""
+    if not qq or not qq.isdigit():
+        return
+    _NAPCAT_CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+
+    # 1. napcat_protocol_<QQ>.json
+    _write_if_missing(_NAPCAT_CONFIG_DIR / f"napcat_protocol_{qq}.json", {
+        "enable": False,
+        "network": {
+            "httpServers": [],
+            "websocketServers": [],
+            "websocketClients": []
+        }
+    })
+
+    # 2. onebot11_<QQ>.json
+    _write_if_missing(_NAPCAT_CONFIG_DIR / f"onebot11_{qq}.json", {
+        "network": {
+            "httpServers": [],
+            "httpSseServers": [],
+            "httpClients": [],
+            "websocketServers": [],
+            "websocketClients": [],
+            "plugins": []
+        },
+        "musicSignUrl": "",
+        "enableLocalFile2Url": False,
+        "parseMultMsg": False,
+        "imageDownloadProxy": "",
+        "timeout": {
+            "baseTimeout": 10000,
+            "uploadSpeedKBps": 256,
+            "downloadSpeedKBps": 256,
+            "maxTimeout": 1800000
+        }
+    })
+
+    # 3. napcat_<QQ>.json
+    _write_if_missing(_NAPCAT_CONFIG_DIR / f"napcat_{qq}.json", {
+        "fileLog": False,
+        "consoleLog": True,
+        "fileLogLevel": "debug",
+        "consoleLogLevel": "info",
+        "packetBackend": "auto",
+        "packetServer": "",
+        "o3HookMode": 1,
+        "bypass": {
+            "hook": False,
+            "window": False,
+            "module": False,
+            "process": False,
+            "container": False,
+            "js": False
+        },
+        "autoTimeSync": True
+    })
+
+    print(f"[Config] NapCat 配置文件已就绪 (QQ: {qq})")
+
+
+def _write_if_missing(path: Path, data: dict):
+    """仅在文件不存在时写入，避免覆盖已有配置。"""
+    if not path.exists():
+        path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 # ── 静态文件（前端 build 后产物）───────────────────────────
 STATIC = Path(__file__).resolve().parent / "static"
@@ -80,6 +163,10 @@ def get_config():
 @app.put("/api/config")
 def update_config(data: dict):
     cfg.save(data)
+    # 如果填写了 Bot QQ，自动生成 NapCat 账号配置文件
+    bot_qq = data.get("bot", {}).get("qq", "").strip()
+    if bot_qq:
+        _sync_napcat_configs(bot_qq)
     return {"ok": True}
 
 
@@ -98,7 +185,7 @@ def set_config_key(payload: dict):
 
 @app.post("/api/bot/start")
 def api_bot_start():
-    napcat_path = cfg.get("napcat.path", "")
+    napcat_path = _get_napcat_path()
     if napcat_path:
         mgr.start_napcat(napcat_path)
     ok = mgr.start_bot()
@@ -115,7 +202,7 @@ def api_bot_stop():
 def api_bot_restart():
     mgr.stop_bot()
     time.sleep(1)
-    napcat_path = cfg.get("napcat.path", "")
+    napcat_path = _get_napcat_path()
     if napcat_path:
         mgr.start_napcat(napcat_path)
     ok = mgr.start_bot()
@@ -124,7 +211,7 @@ def api_bot_restart():
 
 @app.post("/api/napcat/start")
 def api_napcat_start():
-    path = cfg.get("napcat.path", "")
+    path = _get_napcat_path()
     if not path:
         return {"ok": False, "error": "NapCat 路径未配置"}
     ok = mgr.start_napcat(path)
@@ -143,7 +230,7 @@ def api_napcat_stop():
 
 @app.get("/api/status")
 def api_status():
-    napcat_path = cfg.get("napcat.path", "")
+    napcat_path = _get_napcat_path()
     nc_running = mgr.napcat_running()
     nc_logged = mgr.napcat_logged_in()
 
@@ -179,8 +266,8 @@ def api_logs(limit: int = 200):
 
 @app.get("/api/qrcode")
 def qrcode():
-    # 优先用配置中的 NapCat 路径
-    np = cfg.get("napcat.path", "")
+    # 优先用 NapCat 路径（自动检测 > 用户配置）
+    np = _get_napcat_path()
     if np:
         qr = Path(np) / "cache" / "qrcode.png"
         if qr.exists():
