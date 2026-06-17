@@ -1,7 +1,5 @@
 @echo off
 chcp 65001 >nul
-
-:: Anchor to script directory (run from anywhere)
 cd /d "%~dp0"
 
 echo ====================================
@@ -11,7 +9,7 @@ echo.
 
 :: Check frontend build
 if not exist "launcher\static\index.html" (
-    echo [WARN] Frontend build not found (launcher\static\index.html)
+    echo [WARN] Frontend build not found
     echo Building frontend...
     cd /d "%~dp0launcher\frontend"
     if errorlevel 1 (
@@ -32,4 +30,5 @@ if not exist "launcher\static\index.html" (
 echo [ OK ] Starting backend server...
 cd /d "%~dp0launcher"
 start http://localhost:8000
-uvicorn app:app --host 0.0.0.0 --port 8000
+python -m uvicorn app:app --host 0.0.0.0 --port 8000
+pause
