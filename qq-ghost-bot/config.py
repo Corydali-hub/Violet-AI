@@ -12,27 +12,44 @@ from dotenv import load_dotenv
 load_dotenv(Path(__file__).parent / ".env")
 
 # ============================================================
-# 工具：读取 WebUI 的配置文件
+# 工具：读取 WebUI 的配置文件（支持热重载）
 # ============================================================
+
+_CONFIG_PATH = Path(__file__).resolve().parent.parent / "launcher" / "data" / "config.json"
+_CONFIG_MTIME: float = 0.0
+_WEBUI_CONFIG: dict = {}
+
 
 def _load_webui_config():
     """尝试读取 launcher/data/config.json，失败则返回空字典"""
-    base_dir = Path(__file__).resolve().parent.parent
-    json_path = base_dir / "launcher" / "data" / "config.json"
-    
-    if not json_path.exists():
+    global _CONFIG_MTIME, _WEBUI_CONFIG
+
+    if not _CONFIG_PATH.exists():
+        _CONFIG_MTIME = 0.0
+        _WEBUI_CONFIG = {}
         return {}
-    
+
     try:
-        with open(json_path, "r", encoding="utf-8") as f:
+        new_mtime = _CONFIG_PATH.stat().st_mtime
+        # 文件未变化 → 直接返回缓存
+        if new_mtime == _CONFIG_MTIME and _WEBUI_CONFIG:
+            return _WEBUI_CONFIG
+    except OSError:
+        pass
+
+    try:
+        with open(_CONFIG_PATH, "r", encoding="utf-8") as f:
             data = json.load(f)
-            return data if isinstance(data, dict) else {}
+            _WEBUI_CONFIG = data if isinstance(data, dict) else {}
+            _CONFIG_MTIME = _CONFIG_PATH.stat().st_mtime
+            return _WEBUI_CONFIG
     except Exception as e:
         print(f"[config] 读取 WebUI 配置失败: {e}，将使用 .env 或默认值")
         return {}
 
-# 加载 WebUI 配置
-_WEBUI_CONFIG = _load_webui_config()
+
+# 首次加载
+_load_webui_config()
 
 
 # ============================================================
@@ -41,12 +58,13 @@ _WEBUI_CONFIG = _load_webui_config()
 
 def _get_webui(*keys: str, default: str = "") -> str:
     """
-    从 WebUI 配置中按路径取值。
+    从 WebUI 配置中按路径取值（每次调用自动检测文件变化）。
     例如: _get_webui("bot", "bot_name") 读取 config.json 中的 bot.bot_name
     """
-    if not _WEBUI_CONFIG:
+    cfg = _load_webui_config()
+    if not cfg:
         return default
-    current = _WEBUI_CONFIG
+    current = cfg
     for key in keys:
         if isinstance(current, dict):
             current = current.get(key)
@@ -92,19 +110,41 @@ BOT_NAME = (
     or "MyBot"
 )
 
-# 主人 QQ
-OWNER_ID = (
-    _get_webui("bot", "owner", default="")
-    or os.getenv("OWNER_ID", "")
-    or ""
-)
+# 机器人名字（热重载：每次调用重新读取）
+def get_bot_name() -> str:
+    return (
+        _get_webui("bot", "bot_name", default="")
+        or os.getenv("BOT_NAME", "")
+        or "猫娘"
+    )
 
-# 主人称呼
-OWNER_TITLE = (
-    _get_webui("bot", "owner_title", default="")
-    or os.getenv("OWNER_TITLE", "")
-    or "主人"
-)
+
+# 主人 QQ（热重载：每次调用重新读取）
+def get_owner_id() -> str:
+    return (
+        _get_webui("bot", "owner", default="")
+        or os.getenv("OWNER_ID", "")
+        or ""
+    )
+
+
+# 主人称呼（热重载：每次调用重新读取）
+def get_owner_title() -> str:
+    return (
+        _get_webui("bot", "owner_title", default="")
+        or os.getenv("OWNER_TITLE", "")
+        or "主人"
+    )
+
+
+# 向后兼容的模块级常量（首次导入时固定，可能过时；推荐用 getter 函数）
+OWNER_ID = get_owner_id()
+OWNER_TITLE = get_owner_title()
+
+# ===== Tavily 搜索 API（可选） =====
+def get_tavily_api_key() -> str:
+    return _get_webui("tavily", "api_key", default="") or os.getenv("TAVILY_API_KEY", "")
+
 
 # ===== OneBot WebSocket 地址 =====
 ONEBOT_WS_URL = (
@@ -143,7 +183,7 @@ if __name__ != "__main__":
     else:
         sources.append("未配置")
     
-    print(f"[config] 主人 QQ: {OWNER_ID or '(未设置)'} (来源: {sources[0]})")
+    print(f"[config] 主人 QQ: {get_owner_id() or '(未设置)'} (来源: {sources[0]})")
     print(f"[config] 机器人名字: {BOT_NAME}")
-    print(f"[config] 主人称呼: {OWNER_TITLE}")
+    print(f"[config] 主人称呼: {get_owner_title()}")
     print(f"[config] OneBot WS 地址: {ONEBOT_WS_URL}")

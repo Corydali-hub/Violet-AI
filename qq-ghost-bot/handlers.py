@@ -3,6 +3,7 @@
 """
 
 import asyncio
+import re
 import time
 
 from state_manager import (
@@ -17,7 +18,28 @@ from state_manager import (
     set_all_paused,          # 新增
 )
 from llm import stream_reply_llm
-from config import BOT_NAME, WHITELIST, OWNER_ID, OWNER_TITLE
+from config import BOT_NAME, WHITELIST, OWNER_ID, OWNER_TITLE, get_owner_id, get_owner_title
+
+# ============================================================
+# 工具：将 @QQ号 转换为真实 CQ:at 码
+# ============================================================
+
+# 匹配 @名称 (QQ号) 或 @名称（QQ号）—— 作为 LLM 不写纯数字时的兜底
+_AT_NAME_RE = re.compile(r"@([^\d\s)]+)\s*[(（](\d+)[)）]")
+# 匹配 @QQ号（纯数字）
+_AT_DIGIT_RE = re.compile(r"@(\d+)")
+
+
+def _apply_at(text: str) -> str:
+    """将 LLM 回复中的 @提及 替换为 OneBot 真实的 CQ:at 码。
+
+    优先匹配 @名称 (QQ号) 格式作为兜底，再匹配 @QQ号 格式。
+    """
+    # 先处理 @名称 (数字) —— 整个替换掉，避免后续被 @数字 二次匹配
+    text = _AT_NAME_RE.sub(r"[CQ:at,qq=\2]", text)
+    # 再处理 @数字
+    text = _AT_DIGIT_RE.sub(r"[CQ:at,qq=\1]", text)
+    return text
 
 
 # ============================================================
@@ -61,18 +83,22 @@ def mentioned(text: str, raw: str, self_id: str) -> bool:
 
 
 def extract_text(msg: list) -> str:
-    """提取文本消息。"""
-    return "".join(
-        seg["data"].get("text", "")
-        for seg in msg
-        if seg["type"] == "text"
-    ).strip()
+    """提取文本消息，将 @ 段转为 @QQ 格式，让 LLM 看到 QQ 号。"""
+    parts = []
+    for seg in msg:
+        if seg["type"] == "text":
+            parts.append(seg["data"].get("text", ""))
+        elif seg["type"] == "at":
+            qq = seg["data"].get("qq", "")
+            if qq:
+                parts.append(f"@{qq}")
+    return "".join(parts).strip()
 
 
-def remove_bot_name(text: str) -> str:
-    """去掉 @Bot 前缀。"""
+def remove_bot_name(text: str, self_id: str = "") -> str:
+    """去掉 @Bot 前缀（支持 @名字 和 @QQ号）。"""
     t = text.strip()
-    for prefix in (f"@{BOT_NAME}", BOT_NAME):
+    for prefix in (f"@{BOT_NAME}", BOT_NAME, f"@{self_id}"):
         if t.startswith(prefix):
             return t[len(prefix):].strip()
     return t
@@ -103,7 +129,7 @@ async def handle_owner_no_at(gid: str, msg: str, send_group) -> bool:
     # 全局静音（新增）
     if msg == "全局静音":
         n = set_all_paused(True)
-        await send_group(int(gid), f"📢 已静音 {n} 个群，所有群将不再响应 AI 对话。")
+        await send_group(int(gid), f"📢 已静音 {n} 个群，所有群将不再响应对话。")
         return True
 
     # 全局活跃（新增）
@@ -148,7 +174,7 @@ async def handle_owner_at(gid: str, command: str, send_group) -> bool:
     # 切换毒舌人格
     if command == "坏" and state["persona"] != "tsundere":
         set_persona(gid, "tsundere")
-        await send_group(int(gid), "哼，终于轮到本小姐出来了吗？希望你们别被我气哭。")
+        await send_group(int(gid), "哼，终于轮到本小姐出来了吗？希望你们别被我气哭躲到被子里呜呜呜。")
         return True
 
     # 设置毒舌目标
@@ -156,19 +182,19 @@ async def handle_owner_at(gid: str, command: str, send_group) -> bool:
         target = command[2:].strip()
         if target:
             set_target(gid, target)
-            await send_group(int(gid), f"呵，知道了，以后重点照顾一下 {target}。")
+            await send_group(int(gid), f"呵，知道了，以后猫猫我会重点针对一下 {target}。")
         return True
 
     # 取消攻击目标
     if command in ("停止攻击", "停", "关闭毒舌"):
         set_target(gid, None)
-        await send_group(int(gid), "啧，算他运气好，暂时放过他。")
+        await send_group(int(gid), "啧，看在主人的面子上那我就放过你了。")
         return True
 
     # 清除当前群记忆
     if command == "清记忆":
         clear_history(gid)
-        await send_group(int(gid), "喵……猫猫把这个群的记忆整理干净啦。")
+        await send_group(int(gid), "喵……猫猫把这个群的记忆全倒出小脑袋瓜啦。")
         return True
 
     return False
@@ -192,9 +218,10 @@ def build_prompt(
     state = get_state(gid)
 
     if is_owner:
+        owner_title = get_owner_title()
         prompt = (
-            f"{OWNER_TITLE}对你说：{command}\n"
-            f"请以亲近、依赖{OWNER_TITLE}的方式回复。"
+            f"{owner_title}对你说：{command}\n"
+            f"请以亲近、依赖{owner_title}的方式回复。"
         )
         return prompt, True
 
@@ -262,7 +289,7 @@ async def handle_message(data: dict, send_group):
         return
 
     msg = text.strip()
-    is_owner = (uid == OWNER_ID)
+    is_owner = (uid == get_owner_id())
 
     # ── 主人控制（无需 @） ──
     if is_owner and await handle_owner_no_at(gid, msg, send_group):
@@ -297,7 +324,7 @@ async def handle_message(data: dict, send_group):
         return
 
     # 去掉 @ 名字
-    command = remove_bot_name(text)
+    command = remove_bot_name(text, sid)
 
     # ── 主人高级命令（需要 @） ──
     if is_owner and await handle_owner_at(gid, command, send_group):
@@ -315,7 +342,7 @@ async def handle_message(data: dict, send_group):
         buffer = ""
         first_sent = False
 
-        async for delta in stream_reply_llm(gid, prompt, force_catgirl):
+        async for delta in stream_reply_llm(gid, prompt, force_catgirl, search_query=command):
             buffer += delta
 
             # 当 buffer 长度达到最小阈值时，尝试分段
@@ -333,7 +360,7 @@ async def handle_message(data: dict, send_group):
 
                 if cut_pos != -1:
                     # 找到合适的截断点（完整句子结束）
-                    await send_group(int(gid), buffer[:cut_pos])
+                    await send_group(int(gid), _apply_at(buffer[:cut_pos]))
                     buffer = buffer[cut_pos:]
                     first_sent = True
                     continue
@@ -354,7 +381,7 @@ async def handle_message(data: dict, send_group):
                         cut_pos = found
                     else:
                         cut_pos = MAX_LEN   # 实在找不到就硬切
-                    await send_group(int(gid), buffer[:cut_pos])
+                    await send_group(int(gid), _apply_at(buffer[:cut_pos]))
                     buffer = buffer[cut_pos:]
                     first_sent = True
                     continue
@@ -364,7 +391,7 @@ async def handle_message(data: dict, send_group):
 
         # 收尾：发送最后剩余的文本（无论多少，一次性发完，避免刷屏）
         if buffer:
-            await send_group(int(gid), buffer)
+            await send_group(int(gid), _apply_at(buffer))
         elif not first_sent:
             # 极端情况：AI 什么都没生成
             await send_group(int(gid), "喵……猫猫好像说不出话了……")

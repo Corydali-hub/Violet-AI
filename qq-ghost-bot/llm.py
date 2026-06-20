@@ -4,9 +4,10 @@ LLM 调用模块 — 封装 DeepSeek 异步客户端，支持流式输出。
 
 from openai import AsyncOpenAI
 
-from config import LLM_API_KEY, LLM_API_BASE, LLM_MODEL
+from config import LLM_API_KEY, LLM_API_BASE, LLM_MODEL, get_owner_id, get_owner_title, get_bot_name, get_tavily_api_key
 from prompts import PROMPT, RULES_BASE, RULES_SHORT, SCHOLAR_BONUS
 from state_manager import get_state, add_history
+from tavily_search import search as tavily_search
 
 
 # ============================================================
@@ -30,7 +31,8 @@ llm = (
 async def stream_reply_llm(
     gid: str,
     prompt: str,
-    force_catgirl: bool = False
+    force_catgirl: bool = False,
+    search_query: str = "",
 ):
     """
     异步生成器，逐块产出 LLM 回复文本。
@@ -49,18 +51,46 @@ async def stream_reply_llm(
         else state["persona"]
     )
 
+    owner_id = get_owner_id()
+    owner_title = get_owner_title()
+    bot_name = get_bot_name()
+    fmt = {"owner_id": owner_id, "owner_title": owner_title, "bot_name": bot_name}
+
     if state["scholar"]:
         system = (
-            PROMPT[persona]
+            PROMPT[persona].format(**fmt)
             + SCHOLAR_BONUS
-            + RULES_BASE
+            + RULES_BASE.format(**fmt)
         )
         max_token = 2048
         temperature = 0.3
+
+        # ── 博学模式：如果配置了 Tavily，进行联网搜索 ──
+        tavily_key = get_tavily_api_key()
+        if tavily_key and search_query:
+            print(f"[Tavily] 搜索: {search_query[:60]}")
+            result = await tavily_search(search_query, tavily_key)
+            if result["images"] or result["answer"] or result["results"]:
+                context_parts = ["【联网搜索结果】"]
+                if result["answer"]:
+                    context_parts.append(f"摘要：{result['answer']}")
+                if result["results"]:
+                    context_parts.append("参考资料：")
+                    for i, r in enumerate(result["results"], 1):
+                        snippet = r.get("content", "")[:300]
+                        context_parts.append(f"{i}. {r.get('title','')} - {snippet}")
+                if result["images"]:
+                    context_parts.append("相关图片链接：")
+                    for url in result["images"][:6]:
+                        context_parts.append(f"- {url}")
+                context_parts.append("（你可以引用以上信息，并用 [CQ:image,file=图片URL] 发送图片）")
+                context_text = "\n".join(context_parts)
+                system += "\n\n" + context_text
+                print(f"[Tavily] 搜索结果已加入上下文 ({len(result.get('images',[]))} 张图片)")
     else:
         system = (
-            PROMPT[persona]
-            + RULES_BASE
+            PROMPT[persona].format(**fmt)
+            + RULES_BASE.format(**fmt)
             + RULES_SHORT
         )
         max_token = 100

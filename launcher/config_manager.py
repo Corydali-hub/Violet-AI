@@ -18,7 +18,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "bot": {
         "owner": "2272025586",
         "qq": "",
-        "bot_name": "Kelly_Bundy",
+        "bot_name": "",
         "ws_url": "ws://127.0.0.1:6700",
         "whitelist": [],
     },
@@ -31,6 +31,9 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "offsetX": 0,
         "offsetY": 0,
         "theme": "dark",
+    },
+    "tavily": {
+        "api_key": "",
     },
 }
 

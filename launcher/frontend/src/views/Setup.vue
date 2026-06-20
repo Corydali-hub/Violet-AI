@@ -18,6 +18,16 @@
     </div>
 
     <div class="setup-card">
+      <div class="card-header">🔍 联网搜索配置</div>
+      <el-form label-position="top" class="setup-form">
+        <el-form-item label="Tavily API Key（可选）">
+          <el-input v-model="form.tavily_api_key" type="password" show-password placeholder="tvly-..." />
+          <div class="field-note">仅博学猫娘模式下生效，不填写则无法输出联网搜索图片</div>
+        </el-form-item>
+      </el-form>
+    </div>
+
+    <div class="setup-card">
       <div class="card-header">🤖 机器人配置</div>
       <el-form label-position="top" class="setup-form">
         <el-form-item label="Bot 名称">
@@ -59,6 +69,7 @@ const form = reactive({
   bot_owner_title: '',
   bot_qq: '',
   bot_ws_url: '',
+  tavily_api_key: '',
 })
 
 onMounted(async () => {
@@ -72,6 +83,7 @@ onMounted(async () => {
     form.bot_owner_title = data.bot?.owner_title || ''
     form.bot_qq = data.bot?.qq || ''
     form.bot_ws_url = data.bot?.ws_url || ''
+    form.tavily_api_key = data.tavily?.api_key || ''
   } catch {}
 })
 
@@ -92,6 +104,9 @@ async function save() {
       owner_title: form.bot_owner_title,
       ws_url: form.bot_ws_url,
       whitelist: [],
+    },
+    tavily: {
+      api_key: form.tavily_api_key,
     },
   }
   try {
@@ -169,6 +184,12 @@ async function save() {
 }
 .setup-form :deep(.el-input__inner::placeholder) {
   color: var(--text-secondary, #64748b);
+}
+.field-note {
+  font-size: 12px;
+  color: var(--text-secondary, #94a3b8);
+  margin-top: 6px;
+  line-height: 1.4;
 }
 .setup-form :deep(.el-input-group__append) {
   background: transparent;
