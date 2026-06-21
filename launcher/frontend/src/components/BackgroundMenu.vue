@@ -44,7 +44,7 @@
         <el-divider />
 
         <div class="menu-item github-link">
-          <a href="https://github.com/your-repo" target="_blank" rel="noopener noreferrer" class="github-btn">
+          <a href="https://github.com/Corydali-hub" target="_blank" rel="noopener noreferrer" class="github-btn">
             <el-icon><Link /></el-icon> 访问作者 GitHub
           </a>
         </div>
