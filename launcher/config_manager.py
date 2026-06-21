@@ -16,7 +16,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "max_tokens": 100,
     },
     "bot": {
-        "owner": "2272025586",
+        "owner": "",
         "qq": "",
         "bot_name": "",
         "ws_url": "ws://127.0.0.1:6700",

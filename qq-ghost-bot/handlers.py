@@ -19,6 +19,7 @@ from state_manager import (
 )
 from llm import stream_reply_llm
 from config import BOT_NAME, WHITELIST, OWNER_ID, OWNER_TITLE, get_owner_id, get_owner_title
+from netease import search_song
 
 # ============================================================
 # 工具：将 @QQ号 转换为真实 CQ:at 码
@@ -328,6 +329,25 @@ async def handle_message(data: dict, send_group):
 
     # ── 主人高级命令（需要 @） ──
     if is_owner and await handle_owner_at(gid, command, send_group):
+        return
+
+    # ── 点歌（需要 @） ──
+    if command.startswith("点歌"):
+        song_name = command[2:].strip()
+        if song_name:
+            songs = await search_song(song_name)
+            if songs:
+                s = songs[0]
+                await send_group(
+                    int(gid),
+                    f"🎵 {s['name']} — {s['artists']}\n"
+                    f"💿 专辑：{s['album']}\n"
+                    f"[CQ:music,type=163,id={s['id']}]"
+                )
+            else:
+                await send_group(int(gid), f"没找到「{song_name}」这首歌呢……换个别名试试？")
+        else:
+            await send_group(int(gid), "要点哪首歌呢？比如 @bot 点歌 晴天")
         return
 
     # ── 构造 Prompt 并调用 LLM（流式 + 句子级分段） ──

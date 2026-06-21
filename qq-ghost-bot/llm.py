@@ -2,12 +2,36 @@
 LLM 调用模块 — 封装 DeepSeek 异步客户端，支持流式输出。
 """
 
+import asyncio
+from urllib.parse import urlparse
+
 from openai import AsyncOpenAI
 
 from config import LLM_API_KEY, LLM_API_BASE, LLM_MODEL, get_owner_id, get_owner_title, get_bot_name, get_tavily_api_key
 from prompts import PROMPT, RULES_BASE, RULES_SHORT, SCHOLAR_BONUS
 from state_manager import get_state, add_history
 from tavily_search import search as tavily_search
+
+
+# ============================================================
+# 工具：检测图片 URL 在国内是否可直连
+# ============================================================
+
+async def _check_url_reachable(url: str, timeout: float = 3.0) -> bool:
+    """TCP 握手探测，成功说明无需代理即可访问"""
+    try:
+        parsed = urlparse(url)
+        host = parsed.hostname
+        port = parsed.port or 443
+        _, writer = await asyncio.wait_for(
+            asyncio.open_connection(host, port),
+            timeout=timeout
+        )
+        writer.close()
+        await asyncio.sleep(0)  # 确保 writer 完全关闭
+        return True
+    except Exception:
+        return False
 
 
 # ============================================================
@@ -80,10 +104,24 @@ async def stream_reply_llm(
                         snippet = r.get("content", "")[:300]
                         context_parts.append(f"{i}. {r.get('title','')} - {snippet}")
                 if result["images"]:
-                    context_parts.append("相关图片链接：")
-                    for url in result["images"][:6]:
-                        context_parts.append(f"- {url}")
-                context_parts.append("（你可以引用以上信息，并用 [CQ:image,file=图片URL] 发送图片）")
+                    # 并发检测国内是否可直连，超时 3 秒/张
+                    checks = await asyncio.gather(
+                        *[_check_url_reachable(url) for url in result["images"][:10]],
+                        return_exceptions=True
+                    )
+                    reachable = [
+                        url for url, ok in zip(result["images"][:10], checks)
+                        if ok is True
+                    ]
+                    if reachable:
+                        context_parts.append("相关图片链接（国内可访问）：")
+                        for url in reachable[:6]:
+                            context_parts.append(f"- {url}")
+                        context_parts.append("（你可以引用以上信息，并用 [CQ:image,file=图片URL] 发送图片）")
+                        print(f"[Tavily] {len(reachable)}/{len(result['images'])} 张图片国内可达")
+                    else:
+                        context_parts.append("（搜索结果中有图片但国内均不可达，请用文字描述）")
+                        print(f"[Tavily] 0/{len(result['images'])} 张图片国内可达，已跳过")
                 context_text = "\n".join(context_parts)
                 system += "\n\n" + context_text
                 print(f"[Tavily] 搜索结果已加入上下文 ({len(result.get('images',[]))} 张图片)")
